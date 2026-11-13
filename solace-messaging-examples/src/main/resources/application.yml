@@ -1,0 +1,21 @@
+# Example configuration for a local broker:
+#   docker run -d -p 55555:55555 -p 8080:8080 --shm-size=1g \
+#     -e username_admin_globalaccesslevel=admin -e username_admin_password=admin \
+#     solace/solace-pubsub-standard
+numaan:
+  solace:
+    connection:
+      host: ${SOLACE_HOST:tcp://localhost:55555}
+      vpn-name: ${SOLACE_VPN:default}
+      username: ${SOLACE_USERNAME:default}
+      password: ${SOLACE_PASSWORD:default}
+      # Examples only: lets the client create queues and durable endpoints.
+      dynamic-durables: true
+    consumer:
+      retry:
+        max-attempts: 3
+        initial-interval: 500
+
+logging:
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{solace.consumer:-}|%X{solace.correlationId:-}] %logger{20} - %msg%n"
