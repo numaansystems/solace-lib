@@ -57,6 +57,7 @@ class SolaceAutoConfigurationTest {
                         "numaan.solace.publisher.send-timeout=5000",
                         "numaan.solace.consumer.concurrency=5",
                         "numaan.solace.consumer.acknowledge-mode=MANUAL",
+                        "numaan.solace.consumer.dead-letter-queue={destination}.dlq",
                         "numaan.solace.consumer.retry.max-attempts=4",
                         "numaan.solace.consumer.retry.initial-interval=250ms")
                 .run(context -> {
@@ -68,9 +69,19 @@ class SolaceAutoConfigurationTest {
                             .isEqualTo("NON_PERSISTENT");
                     assertThat(properties.getConsumer().toSettings().concurrency()).isEqualTo(5);
                     assertThat(properties.getConsumer().toSettings().acknowledgeMode().name()).isEqualTo("MANUAL");
+                    assertThat(properties.getConsumer().toSettings().deadLetterQueue())
+                            .isEqualTo("{destination}.dlq");
                     assertThat(properties.getConsumer().toSettings().retry().maxAttempts()).isEqualTo(4);
                     assertThat(properties.getConsumer().toSettings().retry().initialInterval()).hasMillis(250);
                 });
+    }
+
+    @Test
+    void healthIndicatorIsRegisteredAndCanBeSwitchedOff() {
+        contextRunner.withPropertyValues(CONNECTION)
+                .run(context -> assertThat(context).hasSingleBean(SolaceHealthIndicator.class));
+        contextRunner.withPropertyValues(CONNECTION).withPropertyValues("management.health.solace.enabled=false")
+                .run(context -> assertThat(context).doesNotHaveBean(SolaceHealthIndicator.class));
     }
 
     @Test

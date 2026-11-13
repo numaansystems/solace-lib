@@ -167,12 +167,19 @@ public class SolaceProperties {
         /** Wait between attempts to re-establish a failed consumer connection. */
         private Duration recoveryInterval = Duration.ofSeconds(5);
 
+        /**
+         * Default dead-letter queue for messages a handler could not process
+         * after all retries. May contain {destination}, replaced by the consumed
+         * queue name or the durable subscription name. Empty means none.
+         */
+        private String deadLetterQueue;
+
         private final Retry retry = new Retry(3);
 
         ConsumerSettings toSettings() {
             try {
                 return new ConsumerSettings(concurrency, acknowledgeMode, retry.toPolicy(), receiveTimeout,
-                        recoveryInterval);
+                        recoveryInterval, deadLetterQueue);
             } catch (RuntimeException ex) {
                 throw new SolaceConfigurationException(
                         "Invalid " + PREFIX + ".consumer configuration: " + ex.getMessage(), ex);
@@ -209,6 +216,14 @@ public class SolaceProperties {
 
         public void setReceiveTimeout(Duration receiveTimeout) {
             this.receiveTimeout = receiveTimeout;
+        }
+
+        public String getDeadLetterQueue() {
+            return deadLetterQueue;
+        }
+
+        public void setDeadLetterQueue(String deadLetterQueue) {
+            this.deadLetterQueue = deadLetterQueue;
         }
 
         public Duration getRecoveryInterval() {

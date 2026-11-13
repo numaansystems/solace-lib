@@ -93,8 +93,9 @@ public class DefaultSolaceConsumer implements SolaceConsumer, SmartLifecycle, Au
                 options.getErrorHandler() != null ? options.getErrorHandler() : defaultErrorHandler;
 
         AtomicBoolean stopping = new AtomicBoolean(false);
+        String deadLetterQueue = settings.deadLetterQueueFor(options);
         MessageProcessor<T> processor = new MessageProcessor<>(name, acknowledgeMode, retryPolicy,
-                options.getDeadLetterQueue(), payloadType, handler, serializer, mapper, errorHandler, metrics,
+                deadLetterQueue, payloadType, handler, serializer, mapper, errorHandler, metrics,
                 stopping::get);
 
         LibraryAcknowledgedContainer container = new LibraryAcknowledgedContainer();
@@ -144,9 +145,9 @@ public class DefaultSolaceConsumer implements SolaceConsumer, SmartLifecycle, Au
             }
         }
         log.info("Registered consumer name={} destination={} destinationType={} subscriptionType={} "
-                        + "acknowledgeMode={} concurrency={}-{}",
+                        + "acknowledgeMode={} concurrency={}-{} deadLetterQueue={}",
                 name, options.getDestination(), options.getDestinationType(), options.getSubscriptionType(),
-                acknowledgeMode, concurrency, maxConcurrency);
+                acknowledgeMode, concurrency, maxConcurrency, deadLetterQueue);
         return registration;
     }
 

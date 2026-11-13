@@ -1,6 +1,6 @@
 package com.numaansystems.solace.internal;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.numaansystems.solace.SerializedPayload;
 import com.numaansystems.solace.SolaceSerializationException;
 import org.junit.jupiter.api.Test;
@@ -15,7 +15,13 @@ class JacksonPayloadSerializerTest {
     public record Quote(String symbol, double price) {
     }
 
-    private final JacksonPayloadSerializer serializer = new JacksonPayloadSerializer(new ObjectMapper());
+    public static class Unserializable {
+        public String getValue() {
+            throw new IllegalStateException("cannot be read");
+        }
+    }
+
+    private final JacksonPayloadSerializer serializer = new JacksonPayloadSerializer(JsonMapper.builder().build());
 
     @Test
     void stringsAreSentAsPlainText() {
@@ -71,7 +77,7 @@ class JacksonPayloadSerializerTest {
         assertThatThrownBy(() -> serializer.deserialize(SerializedPayload.text("not json", null), Quote.class))
                 .isInstanceOf(SolaceSerializationException.class)
                 .hasCauseInstanceOf(Exception.class);
-        assertThatThrownBy(() -> serializer.serialize(new Object(), null))
+        assertThatThrownBy(() -> serializer.serialize(new Unserializable(), null))
                 .isInstanceOf(SolaceSerializationException.class);
     }
 }

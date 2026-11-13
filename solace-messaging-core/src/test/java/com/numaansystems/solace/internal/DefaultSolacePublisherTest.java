@@ -1,6 +1,6 @@
 package com.numaansystems.solace.internal;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.numaansystems.solace.DeliveryMode;
 import com.numaansystems.solace.DestinationType;
 import com.numaansystems.solace.PublishOptions;
@@ -55,6 +55,12 @@ class DefaultSolacePublisherTest {
 
     private DefaultSolacePublisher publisher;
 
+    public static class Unserializable {
+        public String getValue() {
+            throw new IllegalStateException("cannot be read");
+        }
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         when(connectionFactory.createConnection()).thenReturn(connection);
@@ -75,7 +81,7 @@ class DefaultSolacePublisherTest {
 
     private DefaultSolacePublisher publisher(RetryPolicy retry, boolean retryOnUnknownOutcome) {
         publisher = new DefaultSolacePublisher(connectionFactory,
-                new JacksonPayloadSerializer(new ObjectMapper()),
+                new JacksonPayloadSerializer(JsonMapper.builder().build()),
                 new PublisherSettings(DeliveryMode.PERSISTENT, Duration.ofSeconds(5), true, retry,
                         retryOnUnknownOutcome, 2, 10),
                 new SolaceMetrics(meterRegistry));
@@ -141,7 +147,7 @@ class DefaultSolacePublisherTest {
         DefaultSolacePublisher retrying = publisher(retries(3), false);
 
         SolacePublishException failure =
-                catchThrowableOfType(() -> retrying.publish("t", "x"), SolacePublishException.class);
+                catchThrowableOfType(SolacePublishException.class, () -> retrying.publish("t", "x"));
 
         assertThat(failure.isOutcomeUnknown()).isTrue();
         assertThat(failure).hasRootCauseInstanceOf(JMSException.class);
@@ -165,7 +171,7 @@ class DefaultSolacePublisherTest {
         DefaultSolacePublisher noRetry = publisher(RetryPolicy.none(), false);
 
         SolacePublishException failure =
-                catchThrowableOfType(() -> noRetry.publish("t", "x"), SolacePublishException.class);
+                catchThrowableOfType(SolacePublishException.class, () -> noRetry.publish("t", "x"));
 
         assertThat(failure.isOutcomeUnknown()).isFalse();
         verify(producer, never()).send(any(Destination.class), any(Message.class), anyInt(), anyInt(), anyLong());
@@ -179,9 +185,8 @@ class DefaultSolacePublisherTest {
         }).when(producer).send(any(Destination.class), any(Message.class), anyInt(), anyInt(), anyLong());
         DefaultSolacePublisher slow = publisher(RetryPolicy.none(), false);
 
-        SolacePublishException failure = catchThrowableOfType(
-                () -> slow.publish("t", "x", PublishOptions.builder().sendTimeout(Duration.ofMillis(100)).build()),
-                SolacePublishException.class);
+        SolacePublishException failure = catchThrowableOfType(SolacePublishException.class,
+                () -> slow.publish("t", "x", PublishOptions.builder().sendTimeout(Duration.ofMillis(100)).build()));
 
         assertThat(failure.isOutcomeUnknown()).isTrue();
     }
@@ -190,7 +195,7 @@ class DefaultSolacePublisherTest {
     void serializationFailureIsReportedBeforeAnythingIsSent() throws Exception {
         DefaultSolacePublisher noRetry = publisher(RetryPolicy.none(), false);
 
-        assertThatThrownBy(() -> noRetry.publish("t", new Object()))
+        assertThatThrownBy(() -> noRetry.publish("t", new Unserializable()))
                 .isInstanceOf(SolaceSerializationException.class);
         verify(connectionFactory, never()).createConnection();
     }

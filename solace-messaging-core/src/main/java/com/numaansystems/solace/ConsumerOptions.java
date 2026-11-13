@@ -25,6 +25,7 @@ public final class ConsumerOptions {
     private final AcknowledgeMode acknowledgeMode;
     private final RetryPolicy retryPolicy;
     private final String deadLetterQueue;
+    private final boolean deadLetterQueueDisabled;
     private final String messageSelector;
     private final boolean autoStartup;
     private final SolaceErrorHandler errorHandler;
@@ -40,6 +41,7 @@ public final class ConsumerOptions {
         this.acknowledgeMode = builder.acknowledgeMode;
         this.retryPolicy = builder.retryPolicy;
         this.deadLetterQueue = builder.deadLetterQueue;
+        this.deadLetterQueueDisabled = builder.deadLetterQueueDisabled;
         this.messageSelector = builder.messageSelector;
         this.autoStartup = builder.autoStartup;
         this.errorHandler = builder.errorHandler;
@@ -139,8 +141,14 @@ public final class ConsumerOptions {
         return retryPolicy;
     }
 
+    /** {@code null} means "use the configured default, if any". */
     public String getDeadLetterQueue() {
         return deadLetterQueue;
+    }
+
+    /** {@code true} if this consumer opted out of the configured default dead-letter queue. */
+    public boolean isDeadLetterQueueDisabled() {
+        return deadLetterQueueDisabled;
     }
 
     public String getMessageSelector() {
@@ -167,6 +175,7 @@ public final class ConsumerOptions {
         private AcknowledgeMode acknowledgeMode;
         private RetryPolicy retryPolicy;
         private String deadLetterQueue;
+        private boolean deadLetterQueueDisabled;
         private String messageSelector;
         private boolean autoStartup = true;
         private SolaceErrorHandler errorHandler;
@@ -210,11 +219,24 @@ public final class ConsumerOptions {
 
         /**
          * Queue that receives messages the handler could not process after all
-         * retries. Without it, such messages are left for broker redelivery
-         * and the endpoint's own max-redelivery / dead message queue settings.
+         * retries. Overrides the default from configuration
+         * ({@code consumer.dead-letter-queue}). With neither, such messages
+         * are left for broker redelivery and the endpoint's own max-redelivery
+         * / dead message queue settings.
          */
         public Builder deadLetterQueue(String deadLetterQueue) {
             this.deadLetterQueue = deadLetterQueue;
+            this.deadLetterQueueDisabled = false;
+            return this;
+        }
+
+        /**
+         * Do not dead-letter for this consumer, even if configuration supplies
+         * a default dead-letter queue. Failed messages go back to the broker.
+         */
+        public Builder noDeadLetterQueue() {
+            this.deadLetterQueue = null;
+            this.deadLetterQueueDisabled = true;
             return this;
         }
 

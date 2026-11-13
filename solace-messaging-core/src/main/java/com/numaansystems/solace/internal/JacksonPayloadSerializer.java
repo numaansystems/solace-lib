@@ -1,6 +1,6 @@
 package com.numaansystems.solace.internal;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.numaansystems.solace.PayloadSerializer;
 import com.numaansystems.solace.SerializedPayload;
 import com.numaansystems.solace.SolaceSerializationException;

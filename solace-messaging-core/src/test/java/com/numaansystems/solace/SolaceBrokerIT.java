@@ -1,6 +1,6 @@
 package com.numaansystems.solace;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.numaansystems.solace.internal.ConsumerSettings;
 import com.numaansystems.solace.internal.DefaultSolaceConsumer;
 import com.numaansystems.solace.internal.DefaultSolacePublisher;
@@ -74,7 +74,7 @@ class SolaceBrokerIT {
         settings.setPassword(BROKER.getPassword());
         settings.setDynamicDurables(true);
 
-        JacksonPayloadSerializer serializer = new JacksonPayloadSerializer(new ObjectMapper());
+        JacksonPayloadSerializer serializer = new JacksonPayloadSerializer(JsonMapper.builder().build());
         connections = new SolaceConnectionManager(settings);
         publisher = new DefaultSolacePublisher(connections.getSharedConnectionFactory(), serializer,
                 PublisherSettings.defaults(), SolaceMetrics.noop());

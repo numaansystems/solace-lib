@@ -1,6 +1,6 @@
 package com.numaansystems.solace.internal;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.numaansystems.solace.AcknowledgeMode;
 import com.numaansystems.solace.RetryPolicy;
 import com.numaansystems.solace.SolaceConsumeException;
@@ -51,7 +51,7 @@ class MessageProcessorTest {
             Class<T> type, SolaceMessageHandler<T> handler) {
         return new MessageProcessor<>("test-consumer", mode,
                 new RetryPolicy(maxAttempts, Duration.ZERO, 1.0, Duration.ZERO), deadLetterQueue, type, handler,
-                new JacksonPayloadSerializer(new ObjectMapper()), new JmsMessageMapper(), errorHandler,
+                new JacksonPayloadSerializer(JsonMapper.builder().build()), new JmsMessageMapper(), errorHandler,
                 new SolaceMetrics(meterRegistry), () -> false);
     }
 
@@ -215,7 +215,7 @@ class MessageProcessorTest {
                 RetryPolicy.none(), null, Order.class, message -> {
                     throw new IllegalStateException("boom");
                 },
-                new JacksonPayloadSerializer(new ObjectMapper()), new JmsMessageMapper(), throwing,
+                new JacksonPayloadSerializer(JsonMapper.builder().build()), new JmsMessageMapper(), throwing,
                 new SolaceMetrics(meterRegistry), () -> false);
 
         processor.onMessage(jms, session);

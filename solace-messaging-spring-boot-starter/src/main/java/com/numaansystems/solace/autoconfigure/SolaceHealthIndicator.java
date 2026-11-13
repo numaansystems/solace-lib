@@ -3,8 +3,8 @@ package com.numaansystems.solace.autoconfigure;
 import com.numaansystems.solace.ConsumerRegistration;
 import com.numaansystems.solace.SolaceConsumer;
 import com.numaansystems.solace.internal.SolaceConnectionManager;
-import org.springframework.boot.actuate.health.AbstractHealthIndicator;
-import org.springframework.boot.actuate.health.Health;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
 
 import java.util.Collection;
 
@@ -14,21 +14,24 @@ import java.util.Collection;
  * is reported down once the client has given up and a fresh connection attempt
  * fails. Details never include host, username or credentials.
  */
-public class SolaceHealthIndicator extends AbstractHealthIndicator {
+public class SolaceHealthIndicator implements HealthIndicator {
 
     private final SolaceConnectionManager connectionManager;
     private final SolaceConsumer consumer;
 
     public SolaceHealthIndicator(SolaceConnectionManager connectionManager, SolaceConsumer consumer) {
-        super("Solace health check failed");
         this.connectionManager = connectionManager;
         this.consumer = consumer;
     }
 
     @Override
-    protected void doHealthCheck(Health.Builder builder) {
-        connectionManager.verifyConnection();
-        builder.up();
+    public Health health() {
+        try {
+            connectionManager.verifyConnection();
+        } catch (RuntimeException ex) {
+            return Health.down(ex).build();
+        }
+        Health.Builder builder = Health.up();
         if (consumer != null) {
             Collection<ConsumerRegistration> registrations = consumer.getRegistrations();
             builder.withDetail("consumers", registrations.size());
@@ -38,5 +41,6 @@ public class SolaceHealthIndicator extends AbstractHealthIndicator {
         if (connectionManager.getLastErrorAt() != null) {
             builder.withDetail("lastConnectionErrorAt", connectionManager.getLastErrorAt().toString());
         }
+        return builder.build();
     }
 }

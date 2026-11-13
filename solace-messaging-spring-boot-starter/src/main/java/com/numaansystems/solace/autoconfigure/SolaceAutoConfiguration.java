@@ -1,7 +1,5 @@
 package com.numaansystems.solace.autoconfigure;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.numaansystems.solace.PayloadSerializer;
 import com.numaansystems.solace.SolaceConsumer;
 import com.numaansystems.solace.SolaceErrorHandler;
@@ -13,14 +11,15 @@ import com.numaansystems.solace.internal.LoggingSolaceErrorHandler;
 import com.numaansystems.solace.internal.SolaceConnectionManager;
 import com.numaansystems.solace.internal.SolaceMetrics;
 import io.micrometer.core.instrument.MeterRegistry;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.actuate.autoconfigure.health.ConditionalOnEnabledHealthIndicator;
-import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -28,14 +27,15 @@ import org.springframework.context.annotation.Configuration;
  * Wires the Solace messaging library from {@code numaan.solace.*} properties.
  * Every bean can be replaced by declaring one of the same type.
  *
+ * <p>The application's {@code JsonMapper} and {@code MeterRegistry} are looked
+ * up lazily when the library beans are created, so no ordering against other
+ * auto-configurations is needed.
+ *
  * <p>The JMS {@code ConnectionFactory} is intentionally not exposed as a bean,
  * so it neither triggers Spring Boot's own JMS auto-configuration nor clashes
  * with another JMS provider in the same application.
  */
-@AutoConfiguration(afterName = {
-        "org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration",
-        "org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration",
-        "org.springframework.boot.actuate.autoconfigure.metrics.CompositeMeterRegistryAutoConfiguration"})
+@AutoConfiguration
 @ConditionalOnClass(SolacePublisher.class)
 @ConditionalOnProperty(prefix = SolaceProperties.PREFIX, name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties(SolaceProperties.class)
@@ -52,7 +52,7 @@ public class SolaceAutoConfiguration {
     @ConditionalOnMissingBean
     public PayloadSerializer solacePayloadSerializer(ObjectProvider<ObjectMapper> objectMapper) {
         return new JacksonPayloadSerializer(
-                objectMapper.getIfUnique(() -> JsonMapper.builder().findAndAddModules().build()));
+                objectMapper.getIfUnique(() -> JsonMapper.builder().build()));
     }
 
     @Bean
@@ -91,12 +91,13 @@ public class SolaceAutoConfiguration {
     }
 
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnClass({HealthIndicator.class, ConditionalOnEnabledHealthIndicator.class})
+    @ConditionalOnClass(HealthIndicator.class)
+    @ConditionalOnProperty(prefix = "management.health.solace", name = "enabled", havingValue = "true",
+            matchIfMissing = true)
     static class SolaceHealthConfiguration {
 
         @Bean
         @ConditionalOnMissingBean(name = "solaceHealthIndicator")
-        @ConditionalOnEnabledHealthIndicator("solace")
         SolaceHealthIndicator solaceHealthIndicator(SolaceConnectionManager connectionManager,
                 ObjectProvider<SolaceConsumer> consumer) {
             return new SolaceHealthIndicator(connectionManager, consumer.getIfAvailable());

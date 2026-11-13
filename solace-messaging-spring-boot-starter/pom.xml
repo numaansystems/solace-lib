@@ -24,10 +24,10 @@
             <artifactId>spring-boot-starter</artifactId>
         </dependency>
 
-        <!-- Optional: health indicator is registered only when Actuator is on the classpath. -->
+        <!-- Optional: health indicator is registered only when spring-boot-health is on the classpath. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-actuator-autoconfigure</artifactId>
+            <artifactId>spring-boot-health</artifactId>
             <optional>true</optional>
         </dependency>
         <dependency>

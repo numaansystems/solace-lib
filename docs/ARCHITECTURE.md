@@ -1,6 +1,6 @@
 # Architecture and design decisions
 
-Status: proposed with the initial implementation, for review.
+Status: reviewed. Spring JMS, Spring Boot 4.x, the `numaan.solace` prefix, the direct-transport default and the topic concurrency limit are confirmed.
 
 ## 1. Repository assessment
 
@@ -9,9 +9,10 @@ The repository was empty when this work started: no existing Java, Spring Boot o
 | Item | Choice | Why |
 |---|---|---|
 | Java | 17 (compiled with `--release 17`) | Minimum for Spring Boot 3 |
-| Spring Boot | 3.5.16 | Last 3.x line. Its open-source support ended in June 2026; see section 10 |
-| Solace client | `sol-jms-jakarta` 10.30.0 | Solace's `jakarta.jms` client, required by Spring 6 |
-| Coordinates | `com.numaansystems.solace:solace-messaging-*` | Placeholder; rename to the house convention |
+| Spring Boot | 4.1.1 | Current generation (Spring Framework 7, Jakarta EE 11). Spring Boot 3 is not supported |
+| JSON | Jackson 3 (`tools.jackson`) | What Boot 4 auto-configures; the library uses the application's `JsonMapper` |
+| Solace client | `sol-jms-jakarta` 10.30.0 | Solace's `jakarta.jms` client, required by Spring 6 and later |
+| Coordinates | `com.numaansystems.solace:solace-messaging-*` | |
 | Property prefix | `numaan.solace` | Avoids `solace.jms.*` / `solace.java.*` used by Solace's own starters |
 
 ## 2. JMS versus the native Solace API
@@ -107,7 +108,8 @@ The listener container is configured so that it never acknowledges by itself; on
 
 - A message is never acknowledged before the handler has succeeded.
 - **Retry** is in-process with exponential backoff and blocks that consumer thread. Undecodable payloads skip retries.
-- **Dead-lettering**, when `deadLetterQueue` is set, republishes the original message to that queue on the consumer's own session. In TRANSACTED mode this is atomic with consuming the original. In AUTO/MANUAL a crash between the send and the acknowledgement leaves the message in both queues.
+- **Dead-letter queue selection:** the queue set on `ConsumerOptions`, else none if the consumer called `noDeadLetterQueue()`, else `consumer.dead-letter-queue` from configuration. The configured value may contain `{destination}` (queue name, or durable subscription name) so one property yields a queue per consumer. A consumer of the configured queue itself is excluded to prevent a forwarding loop.
+- **Dead-lettering**, when a queue applies, republishes the original message to that queue on the consumer's own session. In TRANSACTED mode this is atomic with consuming the original. In AUTO/MANUAL a crash between the send and the acknowledgement leaves the message in both queues.
 - Without a dead-letter queue the message goes back to the broker. **The broker's max-redelivery setting on the endpoint is then the only thing that ends the loop**; with max-redelivery 0 (unlimited) a poison message is redelivered forever, slowed only by the retry backoff. Published messages are DMQ-eligible by default so the broker can move them to its dead message queue.
 - Duplicates are possible after a failed acknowledgement, a rollback, a reconnect, or an unknown-outcome publish retry. Handlers should be idempotent; `SolaceMessage.getMessageId()` is stable across redeliveries.
 
@@ -140,7 +142,7 @@ Payloads: `String` → text message, `byte[]` → bytes message, anything else �
 
 ## 10. Limitations and open questions for review
 
-1. **Spring Boot line.** Boot 3.5 is out of open-source support; Boot 4 is current. The code uses nothing removed in Boot 4 as far as known, but it has not been built against it. Decide whether to target 4.x now.
+1. **Spring Boot 4 specifics.** The health indicator implements `org.springframework.boot.health.contributor.HealthIndicator` and is switched by `management.health.solace.enabled` only; it does not follow `management.health.defaults.enabled`. Jackson 2 is not supported.
 2. **Send timeout** is enforced by the calling side, not by the client; a timed-out send is not cancelled.
 3. **Shared durable subscriptions** (several consumers on one durable subscription) are not offered; use a queue with a topic subscription.
 4. **Connections:** one per consumer registration. Fine for typical services; revisit if a service registers dozens of consumers.

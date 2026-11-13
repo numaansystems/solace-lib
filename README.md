@@ -31,7 +31,7 @@ Expect to fix small compile or test errors on the first run. Connection recovery
 </dependency>
 ```
 
-Supported versions: Java 17+, Spring Boot 3.5.x, Solace JMS (Jakarta) client 10.30.x. Add `spring-boot-starter-actuator` to get the health indicator and metrics export.
+Supported versions: Java 17+, Spring Boot 4.1.x (Spring Framework 7, Jackson 3), Solace JMS (Jakarta) client 10.30.x. Spring Boot 3 is not supported. Add `spring-boot-starter-actuator` (and `spring-boot-health`, if your Actuator setup does not already bring it) to get the health indicator and metrics export.
 
 ## Quick start
 
@@ -72,7 +72,7 @@ PublishResult result = solacePublisher.publish(
                 .build());
 ```
 
-- Payloads: `String` (text), `byte[]` (binary), any other object (JSON via Jackson). Replace the `PayloadSerializer` bean to change this.
+- Payloads: `String` (text), `byte[]` (binary), any other object (JSON via Jackson 3, using the application's `JsonMapper` bean when there is one). Replace the `PayloadSerializer` bean to change this.
 - `PublishOptions`: destination type (topic by default, or queue), delivery mode, correlation ID, reply-to (topic or queue), message ID, content type, time-to-live, priority, send timeout, DMQ eligibility, custom properties.
 - `publish` blocks; `publishAsync` returns a `CompletableFuture`. Asynchronous publishes are not ordered relative to each other.
 - A persistent publish returns after the broker has acknowledged the message. A non-persistent publish returns once the client has taken the message.
@@ -159,10 +159,25 @@ When a handler throws:
 
 1. It is retried in-process per the retry policy (default 3 attempts, 1 s then 2 s). The consumer thread is blocked meanwhile.
 2. After the last attempt the `SolaceErrorHandler` bean is called (default: log without payload).
-3. If the registration has a `deadLetterQueue`, the message is republished there and removed from the source.
+3. If a dead-letter queue applies (see below), the message is republished there and removed from the source.
 4. Otherwise it is released back to the broker and redelivered with `isRedelivered() == true`.
 
-Step 4 repeats until the endpoint's **max-redelivery** count is reached, after which the broker discards the message or moves it to its dead message queue (messages are published DMQ-eligible by default). If max-redelivery is 0 (unlimited) and no `deadLetterQueue` is set, a message that always fails is redelivered forever. Configure one of the two.
+Step 4 repeats until the endpoint's **max-redelivery** count is reached, after which the broker discards the message or moves it to its dead message queue (messages are published DMQ-eligible by default). If max-redelivery is 0 (unlimited) and no dead-letter queue applies, a message that always fails is redelivered forever. Configure one of the two.
+
+**Choosing the dead-letter queue.** In order of precedence:
+
+1. `ConsumerOptions...deadLetterQueue("orders.dlq")` on the registration.
+2. `ConsumerOptions...noDeadLetterQueue()` opts that consumer out.
+3. `numaan.solace.consumer.dead-letter-queue` in configuration, applied to every other consumer:
+
+```yaml
+numaan:
+  solace:
+    consumer:
+      dead-letter-queue: "{destination}.dlq"   # or one fixed queue name for all consumers
+```
+
+`{destination}` becomes the consumed queue name, or the subscription name for a durable topic subscription. A pattern with the placeholder is not applied to non-durable topic subscriptions, which have no stable name. A consumer reading the configured queue itself is never forwarded to it. The dead-letter queues must exist on the broker; if the republish fails, the message is released for redelivery instead.
 
 Payloads that cannot be deserialized skip step 1.
 
@@ -234,6 +249,7 @@ Prefix `numaan.solace`. Durations accept `500ms`, `5s`, or a plain number of mil
 | `consumer.acknowledge-mode` | `AUTO` | `AUTO`, `MANUAL`, `TRANSACTED` |
 | `consumer.receive-timeout` | `1s` | Poll timeout of consumer threads |
 | `consumer.recovery-interval` | `5s` | Wait between consumer reconnect attempts |
+| `consumer.dead-letter-queue` | — | Default dead-letter queue; may contain `{destination}` |
 | `consumer.retry.max-attempts` | `3` | Handler attempts |
 | `consumer.retry.initial-interval` / `multiplier` / `max-interval` | `1s` / `2` / `10s` | Backoff |
 
@@ -273,7 +289,7 @@ Micrometer meters (registered when a `MeterRegistry` bean exists):
 
 Destination names are not used as tags, to keep cardinality bounded.
 
-With Actuator on the classpath, `/actuator/health` includes a `solace` component (disable with `management.health.solace.enabled=false`). It is DOWN when a broker connection cannot be established. While the client is reconnecting transparently it stays UP.
+With Actuator and `spring-boot-health` on the classpath, `/actuator/health` includes a `solace` component (disable with `management.health.solace.enabled=false`). It is DOWN when a broker connection cannot be established. While the client is reconnecting transparently it stays UP.
 
 Logging: while a handler runs, the MDC holds `solace.consumer`, `solace.messageId` and `solace.correlationId`. Payloads are never logged.
 
@@ -304,7 +320,7 @@ mvn spring-boot:run -Dexample.main=com.numaansystems.solace.examples.queueconsum
 | Durable subscriber fails to bind | Durable topic endpoint not provisioned, already bound by another client, or bound with a different topic |
 | Topic consumer misses messages | Non-durable subscription was not active yet (`isReady()`), or publisher uses direct transport |
 | Only one of several queue consumers gets messages | Queue access type is exclusive |
-| Same message arrives over and over | Handler keeps failing and the endpoint has no max-redelivery; set it or configure `deadLetterQueue` |
+| Same message arrives over and over | Handler keeps failing and the endpoint has no max-redelivery; set it or configure `consumer.dead-letter-queue` |
 | Publishes time out during broker maintenance | Client is reconnecting; raise `publisher.send-timeout` or handle `isOutcomeUnknown()` |
 | `Client Name Already In Use` | Something sets a fixed JMS client ID; the library does not |
 
